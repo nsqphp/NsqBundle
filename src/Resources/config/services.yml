@@ -1,0 +1,3 @@
+services:
+    NsqPHP\NsqBundle\Messenger\NsqTransportFactory:
+        tags: [ 'messenger.transport_factory' ]

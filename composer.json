@@ -1,0 +1,29 @@
+{
+    "name": "nsq/nsq-bundle",
+    "type": "library",
+    "description": "Symfony Integration for NsqPHP",
+    "homepage": "https://github.com/nsqphp/NsqBundle",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Konstantin Grachev",
+            "email": "me@grachevko.ru"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "ext-json": "*",
+        "nsq/nsq": "0.1",
+        "symfony/framework-bundle": "^5.0",
+        "symfony/messenger": "^5.0"
+    },
+    "require-dev": {
+        "ergebnis/composer-normalize": "^2.13"
+    },
+    "autoload": {
+        "psr-4": {
+            "NsqPHP\\NsqBundle\\": "src/"
+        }
+    },
+    "minimum-stability": "dev"
+}
