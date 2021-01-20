@@ -53,15 +53,9 @@ final class NsqTransport implements TransportInterface
      */
     public function send(Envelope $envelope): Envelope
     {
-        $nsqEnvelope = $this->getNsqEnvelope($envelope);
-
         $encodedMessage = $this->serializer->encode($envelope->withoutAll(NsqReceivedStamp::class));
 
         $this->writer->pub($this->topic, json_encode($encodedMessage, JSON_THROW_ON_ERROR));
-
-        if (null !== $nsqEnvelope) {
-            $nsqEnvelope->finish();
-        }
 
         return $envelope;
     }
