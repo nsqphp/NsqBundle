@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace NsqPHP\NsqBundle\Messenger;
 
-use Nsq\Config;
-use Nsq\Connection;
+use Nsq\Subscriber;
+use Nsq\Writer;
 use Symfony\Component\Messenger\Exception\InvalidArgumentException;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportFactoryInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
-use function dump;
 use function parse_str;
 use function parse_url;
 use function sprintf;
@@ -35,7 +34,8 @@ final class NsqTransportFactory implements TransportFactoryInterface
         $address = sprintf('tcp://%s:%s', $parsedUrl['host'] ?? 'nsqd', $parsedUrl['port'] ?? 4150);
 
         return new NsqTransport(
-            Connection::connect(new Config($address)),
+            new Writer($address),
+            new Subscriber($address),
             $nsqOptions['topic'] ?? 'symfony-messenger',
             $nsqOptions['channel'] ?? 'default',
             $serializer

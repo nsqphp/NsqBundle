@@ -7,9 +7,7 @@ namespace NsqPHP\NsqBundle\Messenger;
 use Generator;
 use JsonException;
 use LogicException;
-use Nsq\Connection;
 use Nsq\Envelope as NsqEnvelope;
-use Nsq\Reader;
 use Nsq\Subscriber;
 use Nsq\Writer;
 use Symfony\Component\Messenger\Envelope;
@@ -24,7 +22,9 @@ use const JSON_THROW_ON_ERROR;
 
 final class NsqTransport implements TransportInterface
 {
-    private Connection $connection;
+    private Writer $writer;
+
+    private Subscriber $subscriber;
 
     private SerializerInterface $serializer;
 
@@ -35,12 +35,14 @@ final class NsqTransport implements TransportInterface
     private string $channel;
 
     public function __construct(
-        Connection $connection,
+        Writer $writer,
+        Subscriber $subscriber,
         string $topic,
         string $channel,
         SerializerInterface $serializer = null
     ) {
-        $this->connection = $connection;
+        $this->writer = $writer;
+        $this->subscriber = $subscriber;
         $this->topic = $topic;
         $this->channel = $channel;
         $this->serializer = $serializer ?? new PhpSerializer();
@@ -55,10 +57,10 @@ final class NsqTransport implements TransportInterface
 
         $encodedMessage = $this->serializer->encode($envelope->withoutAll(NsqReceivedStamp::class));
 
-        $this->getPublisher()->pub($this->topic, json_encode($encodedMessage, JSON_THROW_ON_ERROR));
+        $this->writer->pub($this->topic, json_encode($encodedMessage, JSON_THROW_ON_ERROR));
 
         if (null !== $nsqEnvelope) {
-            $nsqEnvelope->ack();
+            $nsqEnvelope->finish();
         }
 
         return $envelope;
@@ -71,7 +73,7 @@ final class NsqTransport implements TransportInterface
     {
         $generator = $this->generator;
         if (null === $generator) {
-            $this->generator = $generator = $this->getSubscriber()->subscribe($this->topic, $this->channel);
+            $this->generator = $generator = $this->subscriber->subscribe($this->topic, $this->channel);
         } else {
             $generator->next();
         }
@@ -86,7 +88,7 @@ final class NsqTransport implements TransportInterface
         try {
             $encodedEnvelope = json_decode($nsqEnvelope->message->body, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            $nsqEnvelope->ack();
+            $nsqEnvelope->finish();
 
             throw new MessageDecodingFailedException('', 0, $e);
         }
@@ -94,7 +96,7 @@ final class NsqTransport implements TransportInterface
         try {
             $envelope = $this->serializer->decode($encodedEnvelope);
         } catch (MessageDecodingFailedException  $e) {
-            $nsqEnvelope->ack();
+            $nsqEnvelope->finish();
 
             throw $e;
         }
@@ -117,7 +119,7 @@ final class NsqTransport implements TransportInterface
             throw new LogicException('Returned envelop doesn\'t related to NsqMessage.');
         }
 
-        $message->ack();
+        $message->finish();
     }
 
     /**
@@ -130,7 +132,7 @@ final class NsqTransport implements TransportInterface
             throw new LogicException('Returned envelop doesn\'t related to NsqMessage.');
         }
 
-        $message->ack();
+        $message->finish();
     }
 
     private function getNsqEnvelope(Envelope $envelope): ?NsqEnvelope
@@ -141,15 +143,5 @@ final class NsqTransport implements TransportInterface
         }
 
         return $stamp->envelope;
-    }
-
-    private function getPublisher(): Writer
-    {
-        return $this->publisher ??= new Writer($this->connection);
-    }
-
-    private function getSubscriber(): Subscriber
-    {
-        return $this->publisher ??= new Subscriber(new Reader($this->connection));
     }
 }
