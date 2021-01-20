@@ -22,7 +22,7 @@
     },
     "autoload": {
         "psr-4": {
-            "NsqPHP\\NsqBundle\\": "src/"
+            "Nsq\\NsqBundle\\": "src/"
         }
     },
     "minimum-stability": "dev"

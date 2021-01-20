@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NsqPHP\NsqBundle\Messenger;
+namespace Nsq\NsqBundle\Messenger;
 
 use Generator;
 use JsonException;

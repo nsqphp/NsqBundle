@@ -1,6 +1,6 @@
 <?php
 
-namespace NsqPHP\NsqBundle\DependencyInjection;
+namespace Nsq\NsqBundle\DependencyInjection;
 
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\Config\FileLocator;
