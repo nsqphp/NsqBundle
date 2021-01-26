@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Nsq\NsqBundle\Messenger;
 
-use Nsq\Envelope;
+use Nsq\Message;
 use Symfony\Component\Messenger\Stamp\StampInterface;
 
 /**
@@ -12,10 +12,10 @@ use Symfony\Component\Messenger\Stamp\StampInterface;
  */
 final class NsqReceivedStamp implements StampInterface
 {
-    public Envelope $envelope;
+    public Message $message;
 
-    public function __construct(Envelope $envelope)
+    public function __construct(Message $message)
     {
-        $this->envelope = $envelope;
+        $this->message = $message;
     }
 }

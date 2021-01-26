@@ -7,9 +7,9 @@ namespace Nsq\NsqBundle\Messenger;
 use Generator;
 use JsonException;
 use LogicException;
-use Nsq\Envelope as NsqEnvelope;
+use Nsq\Producer;
 use Nsq\Subscriber;
-use Nsq\Writer;
+use Nsq\Message;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
 use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
@@ -22,7 +22,7 @@ use const JSON_THROW_ON_ERROR;
 
 final class NsqTransport implements TransportInterface
 {
-    private Writer $writer;
+    private Producer $producer;
 
     private Subscriber $subscriber;
 
@@ -35,13 +35,13 @@ final class NsqTransport implements TransportInterface
     private string $channel;
 
     public function __construct(
-        Writer $writer,
+        Producer $producer,
         Subscriber $subscriber,
         string $topic,
         string $channel,
         SerializerInterface $serializer = null
     ) {
-        $this->writer = $writer;
+        $this->producer = $producer;
         $this->subscriber = $subscriber;
         $this->topic = $topic;
         $this->channel = $channel;
@@ -55,7 +55,7 @@ final class NsqTransport implements TransportInterface
     {
         $encodedMessage = $this->serializer->encode($envelope->withoutAll(NsqReceivedStamp::class));
 
-        $this->writer->pub($this->topic, json_encode($encodedMessage, JSON_THROW_ON_ERROR));
+        $this->producer->pub($this->topic, json_encode($encodedMessage, JSON_THROW_ON_ERROR));
 
         return $envelope;
     }
@@ -72,17 +72,17 @@ final class NsqTransport implements TransportInterface
             $generator->next();
         }
 
-        /** @var NsqEnvelope|null $nsqEnvelope */
-        $nsqEnvelope = $generator->current();
+        /** @var Message|null $nsqMessage */
+        $nsqMessage = $generator->current();
 
-        if (null === $nsqEnvelope) {
+        if (null === $nsqMessage) {
             return [];
         }
 
         try {
-            $encodedEnvelope = json_decode($nsqEnvelope->message->body, true, 512, JSON_THROW_ON_ERROR);
+            $encodedEnvelope = json_decode($nsqMessage->body, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            $nsqEnvelope->finish();
+            $nsqMessage->finish();
 
             throw new MessageDecodingFailedException('', 0, $e);
         }
@@ -90,15 +90,15 @@ final class NsqTransport implements TransportInterface
         try {
             $envelope = $this->serializer->decode($encodedEnvelope);
         } catch (MessageDecodingFailedException  $e) {
-            $nsqEnvelope->finish();
+            $nsqMessage->finish();
 
             throw $e;
         }
 
         return [
             $envelope->with(
-                new NsqReceivedStamp($nsqEnvelope),
-                new TransportMessageIdStamp($nsqEnvelope->message->id),
+                new NsqReceivedStamp($nsqMessage),
+                new TransportMessageIdStamp($nsqMessage->id),
             ),
         ];
     }
@@ -108,8 +108,8 @@ final class NsqTransport implements TransportInterface
      */
     public function ack(Envelope $envelope): void
     {
-        $message = $this->getNsqEnvelope($envelope);
-        if (!$message instanceof NsqEnvelope) {
+        $message = $this->getMessage($envelope);
+        if (!$message instanceof Message) {
             throw new LogicException('Returned envelop doesn\'t related to NsqMessage.');
         }
 
@@ -121,21 +121,21 @@ final class NsqTransport implements TransportInterface
      */
     public function reject(Envelope $envelope): void
     {
-        $message = $this->getNsqEnvelope($envelope);
-        if (!$message instanceof NsqEnvelope) {
+        $message = $this->getMessage($envelope);
+        if (!$message instanceof Message) {
             throw new LogicException('Returned envelop doesn\'t related to NsqMessage.');
         }
 
         $message->finish();
     }
 
-    private function getNsqEnvelope(Envelope $envelope): ?NsqEnvelope
+    private function getMessage(Envelope $envelope): ?Message
     {
         $stamp = $envelope->last(NsqReceivedStamp::class);
         if (!$stamp instanceof NsqReceivedStamp) {
             return null;
         }
 
-        return $stamp->envelope;
+        return $stamp->message;
     }
 }
