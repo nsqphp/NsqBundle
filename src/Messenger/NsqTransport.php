@@ -39,7 +39,7 @@ final class NsqTransport implements TransportInterface
         Subscriber $subscriber,
         string $topic,
         string $channel,
-        SerializerInterface $serializer = null
+        SerializerInterface $serializer = null,
     ) {
         $this->producer = $producer;
         $this->subscriber = $subscriber;
@@ -65,6 +65,8 @@ final class NsqTransport implements TransportInterface
      */
     public function get(): iterable
     {
+        $this->producer->receive(); // keepalive, handle heartbeat messages
+
         $generator = $this->generator;
         if (null === $generator) {
             $this->generator = $generator = $this->subscriber->subscribe($this->topic, $this->channel);
