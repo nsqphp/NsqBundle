@@ -7,45 +7,39 @@ namespace Nsq\NsqBundle\Messenger;
 use Generator;
 use JsonException;
 use LogicException;
+use Nsq\Message;
 use Nsq\Producer;
 use Nsq\Subscriber;
-use Nsq\Message;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
 use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
+use Throwable;
 use function json_decode;
 use function json_encode;
 use const JSON_THROW_ON_ERROR;
 
 final class NsqTransport implements TransportInterface
 {
-    private Producer $producer;
-
-    private Subscriber $subscriber;
-
     private SerializerInterface $serializer;
+
+    private ?LoggerInterface $logger;
 
     private ?Generator $generator = null;
 
-    private string $topic;
-
-    private string $channel;
-
     public function __construct(
-        Producer $producer,
-        Subscriber $subscriber,
-        string $topic,
-        string $channel,
+        private Producer $producer,
+        private Subscriber $subscriber,
+        private string $topic,
+        private string $channel,
         SerializerInterface $serializer = null,
+        LoggerInterface $logger = null,
     ) {
-        $this->producer = $producer;
-        $this->subscriber = $subscriber;
-        $this->topic = $topic;
-        $this->channel = $channel;
         $this->serializer = $serializer ?? new PhpSerializer();
+        $this->logger = $logger;
     }
 
     /**
@@ -65,13 +59,23 @@ final class NsqTransport implements TransportInterface
      */
     public function get(): iterable
     {
-        $this->producer->receive(); // keepalive, handle heartbeat messages
+        try {
+            $this->producer->receive(); // keepalive, handle heartbeat messages
+        } catch (Throwable $e) {
+            $this->logger->error('Producer keepalive failed.', ['exception' => $e]);
+        }
 
         $generator = $this->generator;
         if (null === $generator) {
             $this->generator = $generator = $this->subscriber->subscribe($this->topic, $this->channel);
         } else {
-            $generator->next();
+            try {
+                $generator->next();
+            } catch (Throwable $e) {
+                $this->logger->error('Consumer next failed.', ['exception' => $e]);
+
+                return [];
+            }
         }
 
         /** @var Message|null $nsqMessage */

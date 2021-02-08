@@ -56,7 +56,8 @@ final class NsqTransportFactory implements TransportFactoryInterface
             ),
             $nsqOptions['topic'] ?? 'symfony-messenger',
             $nsqOptions['channel'] ?? 'default',
-            $serializer
+            $serializer,
+            $this->logger,
         );
     }
 
