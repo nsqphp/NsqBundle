@@ -60,7 +60,7 @@ final class NsqTransport implements TransportInterface
     public function get(): iterable
     {
         try {
-            $this->producer->receive(); // keepalive, handle heartbeat messages
+            $this->producer->receive(0); // keepalive, handle heartbeat messages
         } catch (Throwable $e) {
             $this->logger->error('Producer keepalive failed.', ['exception' => $e]);
         }
