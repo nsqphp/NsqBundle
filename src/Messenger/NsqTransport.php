@@ -57,7 +57,7 @@ final class NsqTransport implements TransportInterface
         if (null === $delay) {
             $this->producer->pub($this->topic, $encodedMessage);
         } else {
-            $this->producer->dpub($this->topic, $encodedMessage, $delay);
+            $this->producer->dpub($this->topic, $encodedMessage, $delay / 1000);
         }
 
         return $envelope;
