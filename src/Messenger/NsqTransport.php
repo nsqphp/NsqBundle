@@ -48,15 +48,16 @@ final class NsqTransport implements TransportInterface
     public function send(Envelope $envelope): Envelope
     {
         $encodedMessage = $this->serializer->encode($envelope->withoutAll(NsqReceivedStamp::class));
+        $encodedMessage = json_encode($encodedMessage, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
 
         /** @var DelayStamp|null $delayStamp */
         $delayStamp = $envelope->last(DelayStamp::class);
         $delay = null !== $delayStamp ? $delayStamp->getDelay() : null;
 
         if (null === $delay) {
-            $this->producer->pub($this->topic, $encodedMessage['body']);
+            $this->producer->pub($this->topic, $encodedMessage);
         } else {
-            $this->producer->dpub($this->topic, $encodedMessage['body'], $delay);
+            $this->producer->dpub($this->topic, $encodedMessage, $delay);
         }
 
         return $envelope;
