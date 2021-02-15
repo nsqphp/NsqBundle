@@ -12,6 +12,7 @@ use Nsq\Subscriber;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
+use Symfony\Component\Messenger\Stamp\DelayStamp;
 use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
@@ -48,7 +49,15 @@ final class NsqTransport implements TransportInterface
     {
         $encodedMessage = $this->serializer->encode($envelope->withoutAll(NsqReceivedStamp::class));
 
-        $this->producer->pub($this->topic, json_encode($encodedMessage, JSON_THROW_ON_ERROR));
+        /** @var DelayStamp|null $delayStamp */
+        $delayStamp = $envelope->last(DelayStamp::class);
+        $delay = null !== $delayStamp ? $delayStamp->getDelay() : null;
+
+        if (null === $delay) {
+            $this->producer->pub($this->topic, $encodedMessage['body']);
+        } else {
+            $this->producer->dpub($this->topic, $encodedMessage['body'], $delay);
+        }
 
         return $envelope;
     }
