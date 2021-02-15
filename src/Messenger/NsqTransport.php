@@ -6,7 +6,6 @@ namespace Nsq\NsqBundle\Messenger;
 
 use Generator;
 use JsonException;
-use LogicException;
 use Nsq\Message;
 use Nsq\Producer;
 use Nsq\Subscriber;
@@ -114,10 +113,7 @@ final class NsqTransport implements TransportInterface
      */
     public function ack(Envelope $envelope): void
     {
-        $message = $this->getMessage($envelope);
-        if (!$message instanceof Message) {
-            throw new LogicException('Returned envelop doesn\'t related to NsqMessage.');
-        }
+        $message = NsqReceivedStamp::getMessageFromEnvelope($envelope);
 
         $message->finish();
     }
@@ -127,21 +123,8 @@ final class NsqTransport implements TransportInterface
      */
     public function reject(Envelope $envelope): void
     {
-        $message = $this->getMessage($envelope);
-        if (!$message instanceof Message) {
-            throw new LogicException('Returned envelop doesn\'t related to NsqMessage.');
-        }
+        $message = NsqReceivedStamp::getMessageFromEnvelope($envelope);
 
         $message->finish();
-    }
-
-    private function getMessage(Envelope $envelope): ?Message
-    {
-        $stamp = $envelope->last(NsqReceivedStamp::class);
-        if (!$stamp instanceof NsqReceivedStamp) {
-            return null;
-        }
-
-        return $stamp->message;
     }
 }
