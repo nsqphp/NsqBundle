@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace Nsq\NsqBundle\Messenger;
 
-use Nsq\Consumer;
-use Nsq\Producer;
-use Nsq\Subscriber;
-use Psr\Log\LoggerAwareTrait;
+use Nsq\Config\ClientConfig;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Messenger\Exception\InvalidArgumentException;
@@ -20,7 +17,7 @@ use function sprintf;
 
 final class NsqTransportFactory implements TransportFactoryInterface
 {
-    use LoggerAwareTrait;
+    private LoggerInterface $logger;
 
     public function __construct(LoggerInterface $logger = null)
     {
@@ -42,20 +39,16 @@ final class NsqTransportFactory implements TransportFactoryInterface
         }
 
         $address = sprintf('tcp://%s:%s', $parsedUrl['host'] ?? 'nsqd', $parsedUrl['port'] ?? 4150);
+        $topic = $nsqOptions['topic'] ?? 'symfony-messenger';
+        $channel = $nsqOptions['channel'] ?? 'default';
+
+        $clientConfig = new ClientConfig();
 
         return new NsqTransport(
-            new Producer(
-                address: $address,
-                logger: $this->logger,
-            ),
-            new Subscriber(
-                new Consumer(
-                    address: $address,
-                    logger: $this->logger,
-                )
-            ),
-            $nsqOptions['topic'] ?? 'symfony-messenger',
-            $nsqOptions['channel'] ?? 'default',
+            $address,
+            $topic,
+            $channel,
+            $clientConfig,
             $serializer,
             $this->logger,
         );
