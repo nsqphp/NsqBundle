@@ -5,16 +5,12 @@ declare(strict_types=1);
 namespace Nsq\NsqBundle\Messenger;
 
 use Nsq\Config\ClientConfig;
-use Nsq\Producer;
-use Nsq\Reader;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Messenger\Exception\InvalidArgumentException;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportFactoryInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
-use function Amp\Promise\all;
-use function Amp\Promise\wait;
 use function parse_str;
 use function parse_url;
 use function sprintf;
@@ -46,31 +42,13 @@ final class NsqTransportFactory implements TransportFactoryInterface
         $topic = $nsqOptions['topic'] ?? 'symfony-messenger';
         $channel = $nsqOptions['channel'] ?? 'default';
 
-        $producer = new Producer(
-            address: $address,
-            clientConfig: new ClientConfig(),
-            logger: $this->logger,
-        );
-
-        $reader = new Reader(
-            address: $address,
-            topic: $topic,
-            channel: $channel,
-            clientConfig: new ClientConfig(),
-            logger: $this->logger,
-        );
-
-        wait(
-            all([
-                $producer->connect(),
-                $reader->connect(),
-            ])
-        );
+        $clientConfig = new ClientConfig();
 
         return new NsqTransport(
-            $producer,
-            $reader,
+            $address,
             $topic,
+            $channel,
+            $clientConfig,
             $serializer,
             $this->logger,
         );

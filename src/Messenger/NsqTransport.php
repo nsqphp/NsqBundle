@@ -8,6 +8,7 @@ use Amp\Loop;
 use Amp\Promise;
 use Generator;
 use JsonException;
+use Nsq\Config\ClientConfig;
 use Nsq\Message;
 use Nsq\Producer;
 use Nsq\Reader;
@@ -25,15 +26,20 @@ use const JSON_THROW_ON_ERROR;
 
 final class NsqTransport implements TransportInterface
 {
+    private ?Producer $producer = null;
+
+    private ?Reader $reader = null;
+
     /**
      * @var Promise<Message>|null
      */
     private ?Promise $deferred = null;
 
     public function __construct(
-        private Producer $producer,
-        private Reader $reader,
+        private string $address,
         private string $topic,
+        private string $channel,
+        private ClientConfig $clientConfig,
         private SerializerInterface $serializer,
         private LoggerInterface $logger,
     ) {
@@ -44,6 +50,8 @@ final class NsqTransport implements TransportInterface
      */
     public function send(Envelope $envelope): Envelope
     {
+        $producer = $this->getProducer();
+
         $encodedMessage = $this->serializer->encode($envelope->withoutAll(NsqReceivedStamp::class));
         $encodedMessage = json_encode($encodedMessage, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
 
@@ -52,9 +60,9 @@ final class NsqTransport implements TransportInterface
         $delay = null !== $delayStamp ? $delayStamp->getDelay() : null;
 
         if (null === $delay) {
-            $promise = $this->producer->publish($this->topic, $encodedMessage);
+            $promise = $producer->publish($this->topic, $encodedMessage);
         } else {
-            $promise = $this->producer->defer($this->topic, $encodedMessage, $delay / 1000);
+            $promise = $producer->defer($this->topic, $encodedMessage, $delay / 1000);
         }
 
         wait($promise);
@@ -67,7 +75,7 @@ final class NsqTransport implements TransportInterface
      */
     public function get(): iterable
     {
-        $promise = $this->deferred ??= $this->reader->consume();
+        $promise = $this->deferred ??= $this->getReader()->consume();
 
         /** @var Message|null $message */
         $message = null;
@@ -83,10 +91,12 @@ final class NsqTransport implements TransportInterface
             return [];
         }
 
+        $this->deferred = null;
+
         try {
             $encodedEnvelope = json_decode($message->body, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            $message->finish();
+            wait($message->finish());
 
             throw new MessageDecodingFailedException('', 0, $e);
         }
@@ -94,7 +104,7 @@ final class NsqTransport implements TransportInterface
         try {
             $envelope = $this->serializer->decode($encodedEnvelope);
         } catch (MessageDecodingFailedException  $e) {
-            $message->finish();
+            wait($message->finish());
 
             throw $e;
         }
@@ -114,7 +124,7 @@ final class NsqTransport implements TransportInterface
     {
         $message = NsqReceivedStamp::getMessageFromEnvelope($envelope);
 
-        $message->finish();
+        wait($message->finish());
     }
 
     /**
@@ -124,6 +134,42 @@ final class NsqTransport implements TransportInterface
     {
         $message = NsqReceivedStamp::getMessageFromEnvelope($envelope);
 
-        $message->finish();
+        wait($message->finish());
+    }
+
+    private function getProducer(): Producer
+    {
+        if (null !== $this->producer) {
+            return $this->producer;
+        }
+
+        $producer = new Producer(
+            $this->address,
+            $this->clientConfig,
+            $this->logger,
+        );
+
+        wait($producer->connect());
+
+        return $this->producer = $producer;
+    }
+
+    private function getReader(): Reader
+    {
+        if (null !== $this->reader) {
+            return $this->reader;
+        }
+
+        $reader = new Reader(
+            $this->address,
+            $this->topic,
+            $this->channel,
+            $this->clientConfig,
+            $this->logger,
+        );
+
+        wait($reader->connect());
+
+        return $this->reader = $reader;
     }
 }
