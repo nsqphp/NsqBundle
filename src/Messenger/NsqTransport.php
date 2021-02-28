@@ -156,7 +156,7 @@ final class NsqTransport implements TransportInterface
 
     private function getReader(): Reader
     {
-        if (null !== $this->reader) {
+        if (null === $this->reader) {
             $this->reader = new Reader(
                 $this->address,
                 $this->topic,
