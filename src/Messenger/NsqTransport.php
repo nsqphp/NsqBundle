@@ -62,7 +62,7 @@ final class NsqTransport implements TransportInterface
         if (null === $delay) {
             $promise = $producer->publish($this->topic, $encodedMessage);
         } else {
-            $promise = $producer->defer($this->topic, $encodedMessage, $delay / 1000);
+            $promise = $producer->defer($this->topic, $encodedMessage, $delay);
         }
 
         wait($promise);
