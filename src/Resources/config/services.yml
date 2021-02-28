@@ -1,3 +1,5 @@
 services:
     Nsq\NsqBundle\Messenger\NsqTransportFactory:
-        tags: [ 'messenger.transport_factory' ]
+        tags:
+            - 'messenger.transport_factory'
+            - 'container.no_preload'
