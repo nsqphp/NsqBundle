@@ -75,7 +75,9 @@ final class NsqTransport implements TransportInterface
      */
     public function get(): iterable
     {
-        $promise = $this->deferred ??= $this->getReader()->consume();
+        $reader = $this->getReader();
+
+        $promise = $this->deferred ??= $reader->consume();
 
         /** @var Message|null $message */
         $message = null;
