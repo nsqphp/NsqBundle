@@ -139,37 +139,33 @@ final class NsqTransport implements TransportInterface
 
     private function getProducer(): Producer
     {
-        if (null !== $this->producer) {
-            return $this->producer;
+        if (null === $this->producer) {
+            $this->producer = new Producer(
+                $this->address,
+                $this->clientConfig,
+                $this->logger,
+            );
         }
 
-        $producer = new Producer(
-            $this->address,
-            $this->clientConfig,
-            $this->logger,
-        );
+        wait($this->producer->connect());
 
-        wait($producer->connect());
-
-        return $this->producer = $producer;
+        return $this->producer;
     }
 
     private function getReader(): Reader
     {
         if (null !== $this->reader) {
-            return $this->reader;
+            $this->reader = new Reader(
+                $this->address,
+                $this->topic,
+                $this->channel,
+                $this->clientConfig,
+                $this->logger,
+            );
         }
 
-        $reader = new Reader(
-            $this->address,
-            $this->topic,
-            $this->channel,
-            $this->clientConfig,
-            $this->logger,
-        );
+        wait($this->reader->connect());
 
-        wait($reader->connect());
-
-        return $this->reader = $reader;
+        return $this->reader;
     }
 }
