@@ -4,42 +4,39 @@ declare(strict_types=1);
 
 namespace Nsq\NsqBundle\Messenger;
 
+use Amp\Loop;
+use Amp\Promise;
 use Generator;
 use JsonException;
 use Nsq\Message;
 use Nsq\Producer;
-use Nsq\Subscriber;
+use Nsq\Reader;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
 use Symfony\Component\Messenger\Stamp\DelayStamp;
 use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
-use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
-use Throwable;
+use function Amp\Promise\wait;
 use function json_decode;
 use function json_encode;
 use const JSON_THROW_ON_ERROR;
 
 final class NsqTransport implements TransportInterface
 {
-    private SerializerInterface $serializer;
-
-    private ?LoggerInterface $logger;
-
-    private ?Generator $generator = null;
+    /**
+     * @var Promise<Message>|null
+     */
+    private ?Promise $deferred = null;
 
     public function __construct(
         private Producer $producer,
-        private Subscriber $subscriber,
+        private Reader $reader,
         private string $topic,
-        private string $channel,
-        SerializerInterface $serializer = null,
-        LoggerInterface $logger = null,
+        private SerializerInterface $serializer,
+        private LoggerInterface $logger,
     ) {
-        $this->serializer = $serializer ?? new PhpSerializer();
-        $this->logger = $logger;
     }
 
     /**
@@ -55,10 +52,12 @@ final class NsqTransport implements TransportInterface
         $delay = null !== $delayStamp ? $delayStamp->getDelay() : null;
 
         if (null === $delay) {
-            $this->producer->pub($this->topic, $encodedMessage);
+            $promise = $this->producer->publish($this->topic, $encodedMessage);
         } else {
-            $this->producer->dpub($this->topic, $encodedMessage, $delay / 1000);
+            $promise = $this->producer->defer($this->topic, $encodedMessage, $delay / 1000);
         }
+
+        wait($promise);
 
         return $envelope;
     }
@@ -68,36 +67,26 @@ final class NsqTransport implements TransportInterface
      */
     public function get(): iterable
     {
-        try {
-            $this->producer->receive(0); // keepalive, handle heartbeat messages
-        } catch (Throwable $e) {
-            $this->logger->error('Producer keepalive failed.', ['exception' => $e]);
-        }
+        $promise = $this->deferred ??= $this->reader->consume();
 
-        $generator = $this->generator;
-        if (null === $generator) {
-            $this->generator = $generator = $this->subscriber->subscribe($this->topic, $this->channel);
-        } else {
-            try {
-                $generator->next();
-            } catch (Throwable $e) {
-                $this->logger->error('Consumer next failed.', ['exception' => $e]);
+        /** @var Message|null $message */
+        $message = null;
+        Loop::run(function () use (&$message, $promise): Generator {
+            Loop::delay(500, static function () {
+                Loop::stop();
+            });
 
-                return [];
-            }
-        }
+            $message = yield $promise;
+        });
 
-        /** @var Message|null $nsqMessage */
-        $nsqMessage = $generator->current();
-
-        if (null === $nsqMessage) {
+        if (null === $message) {
             return [];
         }
 
         try {
-            $encodedEnvelope = json_decode($nsqMessage->body, true, 512, JSON_THROW_ON_ERROR);
+            $encodedEnvelope = json_decode($message->body, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            $nsqMessage->finish();
+            $message->finish();
 
             throw new MessageDecodingFailedException('', 0, $e);
         }
@@ -105,15 +94,15 @@ final class NsqTransport implements TransportInterface
         try {
             $envelope = $this->serializer->decode($encodedEnvelope);
         } catch (MessageDecodingFailedException  $e) {
-            $nsqMessage->finish();
+            $message->finish();
 
             throw $e;
         }
 
         return [
             $envelope->with(
-                new NsqReceivedStamp($nsqMessage),
-                new TransportMessageIdStamp($nsqMessage->id),
+                new NsqReceivedStamp($message),
+                new TransportMessageIdStamp($message->id),
             ),
         ];
     }

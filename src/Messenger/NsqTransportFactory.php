@@ -4,23 +4,24 @@ declare(strict_types=1);
 
 namespace Nsq\NsqBundle\Messenger;
 
-use Nsq\Consumer;
+use Nsq\Config\ClientConfig;
 use Nsq\Producer;
-use Nsq\Subscriber;
-use Psr\Log\LoggerAwareTrait;
+use Nsq\Reader;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Messenger\Exception\InvalidArgumentException;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportFactoryInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
+use function Amp\Promise\all;
+use function Amp\Promise\wait;
 use function parse_str;
 use function parse_url;
 use function sprintf;
 
 final class NsqTransportFactory implements TransportFactoryInterface
 {
-    use LoggerAwareTrait;
+    private LoggerInterface $logger;
 
     public function __construct(LoggerInterface $logger = null)
     {
@@ -42,20 +43,34 @@ final class NsqTransportFactory implements TransportFactoryInterface
         }
 
         $address = sprintf('tcp://%s:%s', $parsedUrl['host'] ?? 'nsqd', $parsedUrl['port'] ?? 4150);
+        $topic = $nsqOptions['topic'] ?? 'symfony-messenger';
+        $channel = $nsqOptions['channel'] ?? 'default';
+
+        $producer = new Producer(
+            address: $address,
+            clientConfig: new ClientConfig(),
+            logger: $this->logger,
+        );
+
+        $reader = new Reader(
+            address: $address,
+            topic: $topic,
+            channel: $channel,
+            clientConfig: new ClientConfig(),
+            logger: $this->logger,
+        );
+
+        wait(
+            all([
+                $producer->connect(),
+                $reader->connect(),
+            ])
+        );
 
         return new NsqTransport(
-            new Producer(
-                address: $address,
-                logger: $this->logger,
-            ),
-            new Subscriber(
-                new Consumer(
-                    address: $address,
-                    logger: $this->logger,
-                )
-            ),
-            $nsqOptions['topic'] ?? 'symfony-messenger',
-            $nsqOptions['channel'] ?? 'default',
+            $producer,
+            $reader,
+            $topic,
             $serializer,
             $this->logger,
         );
