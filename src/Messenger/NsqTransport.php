@@ -74,15 +74,13 @@ final class NsqTransport implements TransportInterface
      */
     public function get(): iterable
     {
-        $message = array_pop($this->messages);
-
-        if (null === $message) {
+        if ([] === $this->messages) {
             $this->getConsumer();
 
             wait(delay(500));
-
-            $message = array_pop($this->messages);
         }
+
+        $message = array_pop($this->messages);
 
         if (null === $message) {
             return [];
