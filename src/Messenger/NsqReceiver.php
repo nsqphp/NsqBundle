@@ -11,6 +11,7 @@ use Nsq\Message;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
+use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
 use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
@@ -76,6 +77,7 @@ final class NsqReceiver implements ReceiverInterface
             $envelope->with(
                 new NsqReceivedStamp($message),
                 new TransportMessageIdStamp($message->id),
+                new RedeliveryStamp($message->attempts - 1),
             ),
         ];
     }
@@ -96,6 +98,10 @@ final class NsqReceiver implements ReceiverInterface
     public function reject(Envelope $envelope): void
     {
         $message = NsqReceivedStamp::getMessageFromEnvelope($envelope);
+
+        if ($message->isProcessed()) {
+            return;
+        }
 
         wait($message->finish());
     }
