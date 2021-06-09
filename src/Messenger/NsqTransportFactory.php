@@ -42,7 +42,7 @@ final class NsqTransportFactory implements TransportFactoryInterface
         $topic = $nsqOptions['topic'] ?? 'symfony-messenger';
         $channel = $nsqOptions['channel'] ?? 'default';
 
-        $clientConfig = new ClientConfig();
+        $clientConfig = ClientConfig::fromArray($nsqOptions);
 
         return new NsqTransport(
             $address,
