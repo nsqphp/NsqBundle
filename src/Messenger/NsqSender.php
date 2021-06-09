@@ -42,11 +42,7 @@ final class NsqSender implements SenderInterface
         $delayStamp = $envelope->last(DelayStamp::class);
         $delay = null !== $delayStamp ? $delayStamp->getDelay() : null;
 
-        if (null === $delay) {
-            $promise = $producer->publish($this->topic, $encodedMessage);
-        } else {
-            $promise = $producer->defer($this->topic, $encodedMessage, $delay);
-        }
+        $promise = $producer->publish($this->topic, $encodedMessage, $delay);
 
         wait($promise);
 

@@ -13,7 +13,7 @@
     "require": {
         "php": "^8.0.1",
         "ext-json": "*",
-        "nsq/nsq": "^0.5.1",
+        "nsq/nsq": "^0.6.1",
         "symfony/framework-bundle": "^5.0",
         "symfony/messenger": "^5.0"
     },
