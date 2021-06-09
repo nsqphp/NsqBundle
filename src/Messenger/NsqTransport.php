@@ -4,35 +4,17 @@ declare(strict_types=1);
 
 namespace Nsq\NsqBundle\Messenger;
 
-use JsonException;
 use Nsq\Config\ClientConfig;
-use Nsq\Consumer;
-use Nsq\Message;
-use Nsq\Producer;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
-use Symfony\Component\Messenger\Stamp\DelayStamp;
-use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
 use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
 use Symfony\Component\Messenger\Transport\TransportInterface;
-use function Amp\delay;
-use function Amp\Promise\wait;
-use function array_pop;
-use function json_decode;
-use function json_encode;
-use const JSON_THROW_ON_ERROR;
 
 final class NsqTransport implements TransportInterface
 {
-    private ?Producer $producer = null;
+    private ?NsqReceiver $receiver = null;
 
-    private ?Consumer $consumer = null;
-
-    /**
-     * @var Message[]
-     */
-    private array $messages = [];
+    private ?NsqSender $sender = null;
 
     public function __construct(
         private string $address,
@@ -47,67 +29,9 @@ final class NsqTransport implements TransportInterface
     /**
      * {@inheritdoc}
      */
-    public function send(Envelope $envelope): Envelope
-    {
-        $producer = $this->getProducer();
-
-        $encodedMessage = $this->serializer->encode($envelope->withoutAll(NsqReceivedStamp::class));
-        $encodedMessage = json_encode($encodedMessage, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-
-        /** @var DelayStamp|null $delayStamp */
-        $delayStamp = $envelope->last(DelayStamp::class);
-        $delay = null !== $delayStamp ? $delayStamp->getDelay() : null;
-
-        if (null === $delay) {
-            $promise = $producer->publish($this->topic, $encodedMessage);
-        } else {
-            $promise = $producer->defer($this->topic, $encodedMessage, $delay);
-        }
-
-        wait($promise);
-
-        return $envelope;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
     public function get(): iterable
     {
-        if ([] === $this->messages) {
-            $this->getConsumer();
-
-            wait(delay(500));
-        }
-
-        $message = array_pop($this->messages);
-
-        if (null === $message) {
-            return [];
-        }
-
-        try {
-            $encodedEnvelope = json_decode($message->body, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException $e) {
-            wait($message->finish());
-
-            throw new MessageDecodingFailedException('', 0, $e);
-        }
-
-        try {
-            $envelope = $this->serializer->decode($encodedEnvelope);
-        } catch (MessageDecodingFailedException  $e) {
-            wait($message->finish());
-
-            throw $e;
-        }
-
-        return [
-            $envelope->with(
-                new NsqReceivedStamp($message),
-                new TransportMessageIdStamp($message->id),
-            ),
-        ];
+        return ($this->receiver ?? $this->getReceiver())->get();
     }
 
     /**
@@ -115,9 +39,7 @@ final class NsqTransport implements TransportInterface
      */
     public function ack(Envelope $envelope): void
     {
-        $message = NsqReceivedStamp::getMessageFromEnvelope($envelope);
-
-        wait($message->finish());
+        ($this->receiver ?? $this->getReceiver())->ack($envelope);
     }
 
     /**
@@ -125,43 +47,37 @@ final class NsqTransport implements TransportInterface
      */
     public function reject(Envelope $envelope): void
     {
-        $message = NsqReceivedStamp::getMessageFromEnvelope($envelope);
-
-        wait($message->finish());
+        ($this->receiver ?? $this->getReceiver())->reject($envelope);
     }
 
-    private function getProducer(): Producer
+    /**
+     * {@inheritdoc}
+     */
+    public function send(Envelope $envelope): Envelope
     {
-        if (null === $this->producer) {
-            $this->producer = new Producer(
-                $this->address,
-                $this->clientConfig,
-                $this->logger,
-            );
-        }
-
-        wait($this->producer->connect());
-
-        return $this->producer;
+        return ($this->sender ?? $this->getSender())->send($envelope);
     }
 
-    private function getConsumer(): Consumer
+    private function getReceiver(): NsqReceiver
     {
-        if (null === $this->consumer) {
-            $this->consumer = new Consumer(
-                $this->address,
-                $this->topic,
-                $this->channel,
-                function (Message $message) {
-                    $this->messages[] = $message;
-                },
-                $this->clientConfig,
-                $this->logger,
-            );
-        }
+        return $this->receiver = new NsqReceiver(
+            $this->address,
+            $this->topic,
+            $this->channel,
+            $this->clientConfig,
+            $this->serializer,
+            $this->logger,
+        );
+    }
 
-        wait($this->consumer->connect());
-
-        return $this->consumer;
+    private function getSender(): NsqSender
+    {
+        return $this->sender = new NsqSender(
+            $this->address,
+            $this->topic,
+            $this->clientConfig,
+            $this->serializer,
+            $this->logger,
+        );
     }
 }
