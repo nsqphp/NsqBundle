@@ -29,16 +29,18 @@ final class NsqTransportFactory implements TransportFactoryInterface
      */
     public function createTransport(string $dsn, array $options, SerializerInterface $serializer): TransportInterface
     {
-        if (false === $parsedUrl = parse_url($dsn)) {
+        if (false === $components = parse_url($dsn)) {
             throw new InvalidArgumentException(sprintf('The given Nsq DSN "%s" is invalid.', $dsn));
         }
 
-        $nsqOptions = [];
-        if (isset($parsedUrl['query'])) {
-            parse_str($parsedUrl['query'], $nsqOptions);
+        $query = [];
+        if (isset($components['query'])) {
+            parse_str($components['query'], $query);
         }
 
-        $address = sprintf('tcp://%s:%s', $parsedUrl['host'] ?? 'nsqd', $parsedUrl['port'] ?? 4150);
+        $nsqOptions = $query + $options;
+
+        $address = sprintf('tcp://%s:%s', $components['host'], $components['port'] ?? $query['port'] ?? 4150);
         $topic = $nsqOptions['topic'] ?? 'symfony-messenger';
         $channel = $nsqOptions['channel'] ?? 'default';
 
