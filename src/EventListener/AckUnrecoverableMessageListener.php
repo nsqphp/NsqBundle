@@ -1,8 +1,9 @@
 <?php
 declare(strict_types=1);
 
-namespace Nsq\NsqBundle\Messenger;
+namespace Nsq\NsqBundle\EventListener;
 
+use Nsq\NsqBundle\Messenger\NsqReceivedStamp;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use function Amp\Promise\wait;

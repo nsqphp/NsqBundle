@@ -1,9 +1,0 @@
-services:
-    Nsq\NsqBundle\Messenger\NsqTransportFactory:
-        tags:
-            - 'messenger.transport_factory'
-            - 'container.no_preload'
-
-    Nsq\NsqBundle\Messenger\AckUnrecoverableMessageListener:
-        tags:
-            - { name: kernel.event_subscriber }
