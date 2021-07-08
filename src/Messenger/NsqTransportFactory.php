@@ -39,6 +39,7 @@ final class NsqTransportFactory implements TransportFactoryInterface
         }
 
         $nsqOptions = $query + $options;
+        $nsqOptions['rdyCount'] = 1;
 
         $address = sprintf('tcp://%s:%s', $components['host'], $components['port'] ?? $query['port'] ?? 4150);
         $topic = $nsqOptions['topic'] ?? 'symfony-messenger';
