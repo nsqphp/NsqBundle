@@ -6,6 +6,7 @@ namespace Nsq\NsqBundle\EventListener;
 use Nsq\NsqBundle\Messenger\NsqReceivedStamp;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\Exception\UnrecoverableExceptionInterface;
 use function Amp\Promise\wait;
 
 final class AckUnrecoverableMessageListener implements EventSubscriberInterface
@@ -22,7 +23,7 @@ final class AckUnrecoverableMessageListener implements EventSubscriberInterface
 
     public function onMessageFailed(WorkerMessageFailedEvent $event): void
     {
-        if ($event->willRetry()) {
+        if (!$event->getThrowable() instanceof UnrecoverableExceptionInterface) {
             return;
         }
 
