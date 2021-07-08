@@ -39,24 +39,18 @@ final class NsqSender implements SenderInterface
         $delayStamp = $envelope->last(DelayStamp::class);
         $delay = null !== $delayStamp ? $delayStamp->getDelay() : 0;
 
-        $promise = null;
+        if (null === $envelope->last(NsqReceivedStamp::class)) {
+            $encodedMessage = $this->serializer->encode($envelope);
+            $encodedMessage = json_encode($encodedMessage, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
 
-        if (null !== $envelope->last(NsqReceivedStamp::class)) {
+            wait($producer->publish($this->topic, $encodedMessage, $delay));
+        } else {
             $message = NsqReceivedStamp::getMessageFromEnvelope($envelope);
 
             if (!$message->isProcessed()) {
-                $promise = $message->requeue($delay);
+                wait($message->requeue($delay));
             }
         }
-
-        if (null === $promise) {
-            $encodedMessage = $this->serializer->encode($envelope->withoutAll(NsqReceivedStamp::class));
-            $encodedMessage = json_encode($encodedMessage, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-
-            $promise = $producer->publish($this->topic, $encodedMessage, $delay);
-        }
-
-        wait($promise);
 
         return $envelope;
     }
