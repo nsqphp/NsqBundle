@@ -14,8 +14,8 @@
         "php": "^8.0.1",
         "ext-json": "*",
         "nsq/nsq": "0.7",
-        "symfony/framework-bundle": "^5.0",
-        "symfony/messenger": "^5.0"
+        "symfony/framework-bundle": "^5.0 || ^6.0",
+        "symfony/messenger": "^5.0 || ^6.0"
     },
     "require-dev": {
         "ergebnis/composer-normalize": "^2.13"
@@ -25,5 +25,10 @@
             "Nsq\\NsqBundle\\": "src/"
         }
     },
-    "minimum-stability": "dev"
+    "minimum-stability": "dev",
+    "config": {
+        "allow-plugins": {
+            "ergebnis/composer-normalize": true
+        }
+    }
 }
